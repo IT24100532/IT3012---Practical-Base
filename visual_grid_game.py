@@ -2,7 +2,7 @@
 import random
 import tkinter as tk
 
-from agent import SimpleReflexAgent, ModelBasedAgent
+from agent import SimpleReflexAgent, ModelBasedAgent, SearchAgent
 
 
 class VisualGridHuntGame:
@@ -69,7 +69,12 @@ class VisualGridHuntGame:
             'food_here': tuple(self.agent_pos) in self.food_positions,
             'facing': self.facing,
             'bump': self.bumped,
-            'smells_toxin': tuple(self.agent_pos) in self.toxic_traps
+            'smells_toxin': tuple(self.agent_pos) in self.toxic_traps,
+            # World model exposed for search agents
+            'agent_pos': tuple(self.agent_pos),
+            'grid_size': (self.width, self.height),
+            'walls': list(self.walls),
+            'all_food': list(self.food_positions)
         }
 
     def execute_action(self, action: str):
@@ -138,14 +143,21 @@ class GridGameGUI:
         self.label = tk.Label(root, text="Score: 0 | Steps: 0", font=("Arial", 14))
         self.label.pack(pady=10)
 
-        btn_frame = tk.Frame(root)
-        btn_frame.pack(pady=5)
+        self.agent = None
         self.buttons = []
-        for text, agent_class in (("Run Simple Reflex", SimpleReflexAgent), ("Run Model-Based", ModelBasedAgent)):
-            btn = tk.Button(btn_frame, text=text, command=lambda c=agent_class: self.run_loop(c()),
-                            font=("Arial", 12), bg="#000066", fg="white")
-            btn.pack(side="left", padx=5)
-            self.buttons.append(btn)
+        button_rows = (
+            (("Run Simple Reflex", SimpleReflexAgent), ("Run Model-Based", ModelBasedAgent)),
+            (("Run BFS", lambda: SearchAgent('BFS')), ("Run DFS", lambda: SearchAgent('DFS')),
+             ("Run UCS", lambda: SearchAgent('UCS'))),
+        )
+        for row in button_rows:
+            btn_frame = tk.Frame(root)
+            btn_frame.pack(pady=3)
+            for text, make_agent in row:
+                btn = tk.Button(btn_frame, text=text, command=lambda m=make_agent: self.run_loop(m()),
+                                font=("Arial", 12), bg="#000066", fg="white")
+                btn.pack(side="left", padx=5)
+                self.buttons.append(btn)
 
         self.draw_grid()
 
@@ -191,6 +203,19 @@ class GridGameGUI:
             self.canvas.create_rectangle(x1, y1, x1 + self.cell_size * 0.6, y1 + self.cell_size * 0.6, fill="#990000",
                                          outline="#7a0000")
 
+        # Dots show the remaining planned path of a search agent
+        plan = getattr(self.agent, 'plan', [])
+        px, py = self.env.agent_pos
+        for action in plan:
+            if action not in self.env.MOVES:
+                continue
+            dx, dy = self.env.MOVES[action]
+            px, py = px + dx, py + dy
+            cx = px * self.cell_size + self.cell_size / 2
+            cy = (self.env.height - 1 - py) * self.cell_size + self.cell_size / 2
+            r = max(2, self.cell_size * 0.08)
+            self.canvas.create_oval(cx - r, cy - r, cx + r, cy + r, fill="#38bdf8", outline="")
+
         ax, ay = self.env.agent_pos
         offset = self.cell_size * 0.15
         x1 = ax * self.cell_size + offset
@@ -215,7 +240,8 @@ class GridGameGUI:
         for btn in self.buttons:
             btn.config(state="disabled")
         self.env = self.new_env()
-        name = type(agent).__name__
+        self.agent = agent
+        name = getattr(agent, 'active_algo', type(agent).__name__)
 
         def step():
             if not self.env.is_done():
