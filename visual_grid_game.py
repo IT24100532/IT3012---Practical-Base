@@ -2,14 +2,20 @@
 import random
 import tkinter as tk
 
+from agent import SimpleReflexAgent, ModelBasedAgent
+
 
 class VisualGridHuntGame:
     """A flexible Pacman-style grid environment with support for configurable opponents and larger scales."""
 
-    def __init__(self, width=10, height=10, num_food=10, num_opponents=2, custom_walls=None, num_traps=3):
+    def __init__(self, width=10, height=10, num_food=10, num_opponents=2, custom_walls=None, num_traps=3,
+                 max_steps=60):
         self.width = width
         self.height = height
+        self.max_steps = max_steps
         self.agent_pos = [0, 0]  # Starting position (x, y)
+        self.facing = 'Up'  # Direction of the agent's last move attempt
+        self.bumped = False  # True if the last move attempt was blocked
 
         if custom_walls is not None:
             self.walls = set(custom_walls)
@@ -48,43 +54,44 @@ class VisualGridHuntGame:
         self.steps = 0
         self.collision = False
 
+    MOVES = {'Up': (0, 1), 'Down': (0, -1), 'Left': (-1, 0), 'Right': (1, 0)}
+
+    def is_blocked(self, pos) -> bool:
+        x, y = pos
+        return not (0 <= x < self.width and 0 <= y < self.height) or (x, y) in self.walls
+
     def get_percept(self) -> dict:
+        # Partially observable: only local sensors, no global coordinates
+        dx, dy = self.MOVES[self.facing]
+        ahead = (self.agent_pos[0] + dx, self.agent_pos[1] + dy)
         return {
-            'agent_pos': list(self.agent_pos),
-            'opponent_positions': [list(op) for op in self.opponents],
-            'smells_food': tuple(self.agent_pos) in self.food_positions,
-            'hit_wall': tuple(self.agent_pos) in self.walls,
-            'smells_toxin': tuple(self.agent_pos) in self.toxic_traps,
-            'collision': self.collision,
-            'score': self.score,
-            'remaining_food': len(self.food_positions)
+            'wall_ahead': self.is_blocked(ahead),
+            'food_here': tuple(self.agent_pos) in self.food_positions,
+            'facing': self.facing,
+            'bump': self.bumped,
+            'smells_toxin': tuple(self.agent_pos) in self.toxic_traps
         }
 
     def execute_action(self, action: str):
         self.steps += 1
-        new_pos = list(self.agent_pos)
-
-        if action == 'Up':
-            new_pos[1] = min(self.height - 1, new_pos[1] + 1)
-        elif action == 'Down':
-            new_pos[1] = max(0, new_pos[1] - 1)
-        elif action == 'Left':
-            new_pos[0] = max(0, new_pos[0] - 1)
-        elif action == 'Right':
-            new_pos[0] = min(self.width - 1, new_pos[0] + 1)
-
-        if tuple(new_pos) in self.walls:
-            self.score -= 5
-        else:
-            self.agent_pos = new_pos
-
+        self.bumped = False
         tuple_pos = tuple(self.agent_pos)
-        if tuple_pos in self.food_positions:
-            self.food_positions.remove(tuple_pos)
-            self.score += 20
 
-        if tuple_pos in self.toxic_traps:
-            self.score -= 15
+        if action == 'Suck':
+            if tuple_pos in self.food_positions:
+                self.food_positions.remove(tuple_pos)
+                self.score += 20
+        elif action in self.MOVES:
+            self.facing = action
+            dx, dy = self.MOVES[action]
+            new_pos = [self.agent_pos[0] + dx, self.agent_pos[1] + dy]
+            if self.is_blocked(new_pos):
+                self.score -= 5
+                self.bumped = True
+            else:
+                self.agent_pos = new_pos
+                if tuple(new_pos) in self.toxic_traps:
+                    self.score -= 15
 
         for op in self.opponents:
             move = random.choice(['Up', 'Down', 'Left', 'Right', 'Stay'])
@@ -102,18 +109,21 @@ class VisualGridHuntGame:
                 self.collision = True
 
     def is_done(self) -> bool:
-        return len(self.food_positions) == 0 or self.steps >= 60 or self.collision
+        return len(self.food_positions) == 0 or self.steps >= self.max_steps or self.collision
 
 
 class GridGameGUI:
     """Tkinter wrapper that dynamically scales cell sizes to keep larger grids on screen."""
 
-    def __init__(self, root, width=10, height=10, num_food=12, num_opponents=2, walls=None):
+    def __init__(self, root, width=10, height=10, num_food=12, num_opponents=2, walls=None, max_steps=300):
         self.root = root
         self.root.title("IT3012 - Scalable Multi-Agent Grid Hunt")
 
-        self.env = VisualGridHuntGame(width=width, height=height, num_food=num_food, num_opponents=num_opponents,
-                                      custom_walls=walls)
+        self.env_args = dict(width=width, height=height, num_food=num_food, num_opponents=num_opponents,
+                             custom_walls=walls, max_steps=max_steps)
+        # Fixed layout seed so both agents are tested on the same map
+        self.layout_seed = random.randrange(1_000_000)
+        self.env = self.new_env()
 
         # Dynamically calculate cell size so the total canvas fits nicely within a 600x600 window ceiling
         max_canvas_dim = 600
@@ -128,9 +138,14 @@ class GridGameGUI:
         self.label = tk.Label(root, text="Score: 0 | Steps: 0", font=("Arial", 14))
         self.label.pack(pady=10)
 
-        self.btn = tk.Button(root, text="Start Simulation", command=self.run_loop, font=("Arial", 12), bg="#000066",
-                             fg="white")
-        self.btn.pack(pady=5)
+        btn_frame = tk.Frame(root)
+        btn_frame.pack(pady=5)
+        self.buttons = []
+        for text, agent_class in (("Run Simple Reflex", SimpleReflexAgent), ("Run Model-Based", ModelBasedAgent)):
+            btn = tk.Button(btn_frame, text=text, command=lambda c=agent_class: self.run_loop(c()),
+                            font=("Arial", 12), bg="#000066", fg="white")
+            btn.pack(side="left", padx=5)
+            self.buttons.append(btn)
 
         self.draw_grid()
 
@@ -183,21 +198,39 @@ class GridGameGUI:
         self.canvas.create_oval(x1, y1, x1 + self.cell_size * 0.7, y1 + self.cell_size * 0.7, fill="#000066",
                                 outline="#1e3a8a")
 
-    def run_loop(self):
-        self.btn.config(state="disabled")
+        # White line shows the direction the agent is facing
+        cx = ax * self.cell_size + self.cell_size / 2
+        cy = (self.env.height - 1 - ay) * self.cell_size + self.cell_size / 2
+        dx, dy = self.env.MOVES[self.env.facing]
+        reach = self.cell_size * 0.3
+        self.canvas.create_line(cx, cy, cx + dx * reach, cy - dy * reach, fill="white", width=3)
+
+    def new_env(self):
+        random.seed(self.layout_seed)
+        env = VisualGridHuntGame(**self.env_args)
+        random.seed()
+        return env
+
+    def run_loop(self, agent):
+        for btn in self.buttons:
+            btn.config(state="disabled")
+        self.env = self.new_env()
+        name = type(agent).__name__
 
         def step():
             if not self.env.is_done():
-                action = random.choice(['Up', 'Down', 'Left', 'Right'])
+                action = agent.sense_and_act(self.env.get_percept())
                 self.env.execute_action(action)
 
                 self.draw_grid()
-                self.label.config(text=f"Score: {self.env.score} | Steps: {self.env.steps} | Action: {action}")
-                self.root.after(250, step)
+                self.label.config(text=f"{name} | Score: {self.env.score} | Steps: {self.env.steps} | "
+                                       f"Food left: {len(self.env.food_positions)} | Action: {action}")
+                self.root.after(100, step)
             else:
                 end_text = f"Collision! Game Over! Final Score: {self.env.score}" if self.env.collision else f"Finished! Final Score: {self.env.score}"
-                self.label.config(text=end_text)
-                self.btn.config(state="normal")
+                self.label.config(text=f"{name} | {end_text} | Food left: {len(self.env.food_positions)}")
+                for btn in self.buttons:
+                    btn.config(state="normal")
 
         step()
 
