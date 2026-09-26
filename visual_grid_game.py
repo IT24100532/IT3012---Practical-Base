@@ -148,7 +148,7 @@ class GridGameGUI:
         button_rows = (
             (("Run Simple Reflex", SimpleReflexAgent), ("Run Model-Based", ModelBasedAgent)),
             (("Run BFS", lambda: SearchAgent('BFS')), ("Run DFS", lambda: SearchAgent('DFS')),
-             ("Run UCS", lambda: SearchAgent('UCS'))),
+             ("Run UCS", lambda: SearchAgent('UCS')), ("Run A*", lambda: SearchAgent('AStar'))),
         )
         for row in button_rows:
             btn_frame = tk.Frame(root)
@@ -249,12 +249,14 @@ class GridGameGUI:
                 self.env.execute_action(action)
 
                 self.draw_grid()
+                expanded = f" | Expanded: {agent.nodes_expanded}" if hasattr(agent, 'nodes_expanded') else ""
                 self.label.config(text=f"{name} | Score: {self.env.score} | Steps: {self.env.steps} | "
-                                       f"Food left: {len(self.env.food_positions)} | Action: {action}")
+                                       f"Food left: {len(self.env.food_positions)}{expanded} | Action: {action}")
                 self.root.after(100, step)
             else:
                 end_text = f"Collision! Game Over! Final Score: {self.env.score}" if self.env.collision else f"Finished! Final Score: {self.env.score}"
-                self.label.config(text=f"{name} | {end_text} | Food left: {len(self.env.food_positions)}")
+                expanded = f" | Expanded: {agent.nodes_expanded}" if hasattr(agent, 'nodes_expanded') else ""
+                self.label.config(text=f"{name} | {end_text} | Food left: {len(self.env.food_positions)}{expanded}")
                 for btn in self.buttons:
                     btn.config(state="normal")
 

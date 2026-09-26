@@ -1,5 +1,6 @@
 # agent.py
 import heapq
+import math
 import random
 from collections import deque
 
@@ -103,11 +104,19 @@ class ModelBasedAgent:
 
 
 class SearchAgent:
-    """Goal-based agent that plans a full path to the closest food (BFS, DFS or UCS) before moving."""
+    """Goal-based agent that plans a full path to the closest food (BFS, DFS, UCS or A*) before moving."""
 
-    def __init__(self, active_algo='BFS'):
+    def __init__(self, active_algo='BFS', heuristic_type='manhattan'):
         self.plan = []
         self.active_algo = active_algo
+        self.heuristic_type = heuristic_type
+        self.nodes_expanded = 0  # Total nodes popped from the frontier across all searches
+
+    def manhattan_distance(self, pos, goal):
+        return abs(pos[0] - goal[0]) + abs(pos[1] - goal[1])
+
+    def euclidean_distance(self, pos, goal):
+        return math.sqrt((pos[0] - goal[0]) ** 2 + (pos[1] - goal[1]) ** 2)
 
     def successors(self, pos, walls, grid_size):
         width, height = grid_size
@@ -122,6 +131,7 @@ class SearchAgent:
         reached = {start}
         while frontier:
             pos, path = frontier.popleft()
+            self.nodes_expanded += 1
             if pos == goal:
                 return path
             for action, nxt in self.successors(pos, walls, grid_size):
@@ -141,6 +151,7 @@ class SearchAgent:
             if pos in reached:
                 continue
             reached.add(pos)
+            self.nodes_expanded += 1
             for action, nxt in self.successors(pos, walls, grid_size):
                 if nxt not in reached:
                     frontier.append((nxt, path + [action]))
@@ -156,11 +167,36 @@ class SearchAgent:
                 return path
             if cost > reached[pos]:
                 continue
+            self.nodes_expanded += 1
             for action, nxt in self.successors(pos, walls, grid_size):
                 new_cost = cost + 1  # every step costs 1
                 if nxt not in reached or new_cost < reached[nxt]:
                     reached[nxt] = new_cost
                     heapq.heappush(frontier, (new_cost, nxt, path + [action]))
+        return None
+
+    def astar_search(self, start_pos, goal_pos, walls, grid_size, heuristic_type='manhattan'):
+        start_pos, goal_pos, walls = tuple(start_pos), tuple(goal_pos), set(map(tuple, walls))
+        heuristic = self.euclidean_distance if heuristic_type == 'euclidean' else self.manhattan_distance
+
+        # Priority queue ordered by f(n) = g(n) + h(n)
+        h_start = heuristic(start_pos, goal_pos)
+        frontier = [(h_start, 0, start_pos, [])]
+        reached_states = set()
+        while frontier:
+            f_cost, g_cost, current_pos, path_taken = heapq.heappop(frontier)
+            if current_pos == goal_pos:
+                return path_taken
+            if current_pos in reached_states:
+                continue
+            reached_states.add(current_pos)
+            self.nodes_expanded += 1
+
+            for action, nxt in self.successors(current_pos, walls, grid_size):
+                if nxt not in reached_states:
+                    g_new = g_cost + 1
+                    h_new = heuristic(nxt, goal_pos)
+                    heapq.heappush(frontier, (g_new + h_new, g_new, nxt, path_taken + [action]))
         return None
 
     def sense_and_act(self, percept: dict) -> str:
@@ -170,10 +206,17 @@ class SearchAgent:
 
         if not self.plan:
             start = tuple(percept['agent_pos'])
-            search = {'BFS': self.bfs_search, 'DFS': self.dfs_search, 'UCS': self.ucs_search}[self.active_algo]
+            walls, grid_size = percept['walls'], percept['grid_size']
             # Closest food first (Manhattan distance); skip any that are unreachable
-            for food in sorted(percept['all_food'], key=lambda f: abs(f[0] - start[0]) + abs(f[1] - start[1])):
-                path = search(start, food, percept['walls'], percept['grid_size'])
+            for food in sorted(percept['all_food'], key=lambda f: self.manhattan_distance(start, f)):
+                if self.active_algo == 'BFS':
+                    path = self.bfs_search(start, food, walls, grid_size)
+                elif self.active_algo == 'DFS':
+                    path = self.dfs_search(start, food, walls, grid_size)
+                elif self.active_algo == 'UCS':
+                    path = self.ucs_search(start, food, walls, grid_size)
+                elif self.active_algo == 'AStar':
+                    path = self.astar_search(start, food, walls, grid_size, self.heuristic_type)
                 if path:
                     self.plan = path
                     break
