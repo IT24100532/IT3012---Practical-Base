@@ -12,7 +12,8 @@ selection, crossover and mutation settings.
 | `data/knapPI_1_500_1000_1.csv` | Larger instance (part C): 500 items, capacity 2543, known optimum 28857 |
 | `results/` | Result tables (CSV) written by the script |
 | `figures/` | Convergence plots written by the script |
-| `report.typ` / `report.pdf` | The report (Typst source and compiled PDF) |
+| `IT24100532-Report.pdf` | The report |
+| `output.png` | Terminal output of the full run (used in the report) |
 
 The instances are the first instance of `knapPI_1_100_1000.csv` and `knapPI_1_500_1000.csv` from
 Pisinger's `smallcoeff_pisinger.tgz` (<http://hjemmesider.diku.dk/~pisinger/codes.html>).

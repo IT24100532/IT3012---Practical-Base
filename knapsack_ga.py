@@ -1,7 +1,3 @@
-# knapsack_ga.py
-# Genetic Algorithm for the 0/1 knapsack problem using DEAP.
-# Runs every experiment from Practical 06 (baseline, operator comparison, larger instance)
-# and writes result tables to results/ and plots to figures/.
 import argparse
 import csv
 import random
