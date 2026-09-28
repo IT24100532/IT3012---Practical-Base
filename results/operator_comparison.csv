@@ -1,0 +1,11 @@
+variant,best_mean,best_sd,best_max,gap_to_optimum_pct,gens_to_baseline_median,runs_reaching,first_valid_gen,feasible_runs,note
+"Baseline (k=3, 2pt, pm=0.02)",8293.1,386.1,8929.0,9.3,146,5/10,30.0,10/10,reference
+Tournament k=2,7180.9,462.7,7819.0,21.5,,0/10,66.0,10/10,less pressure
+Tournament k=4,8916.0,198.5,9147.0,2.5,81.5,10/10,27.0,10/10,more pressure
+Roulette,5277.4,666.7,6138.0,42.3,,0/10,120.0,10/10,fitness-proportional
+Rank,7035.1,786.8,7888.0,23.1,,0/10,56.0,10/10,rank-proportional
+1-point crossover,8442.3,536.2,8990.0,7.7,108,7/10,32.0,10/10,fewer cut points
+Uniform crossover,8665.3,339.1,9147.0,5.3,126,9/10,24.5,10/10,diversity trade-off
+pm = 0.01,9109.5,80.4,9147.0,0.4,55.0,10/10,25.5,10/10,less mutation
+pm = 0.05,-5903726.9,4945653.7,2955.0,64642.8,,0/10,148,1/10,more mutation
+pm = 0.10,-43618305.2,4777432.8,-35473857.0,476959.1,,0/10,,0/10,risk of randomization

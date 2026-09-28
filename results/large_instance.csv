@@ -1,0 +1,3 @@
+variant,best_mean,best_sd,best_max,gap_to_optimum_pct,gens_to_baseline_median,runs_reaching,first_valid_gen,feasible_runs,note
+Baseline on 500 items,-326605083.8,22713541.5,-291262693.0,1131905.4,146,5/10,,0/10,reference
+pm = 1/n = 0.002,18938.7,1135.9,20684.0,34.4,55.5,10/10,160.0,10/10,mutation scaled to size
